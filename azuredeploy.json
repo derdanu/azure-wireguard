@@ -45,7 +45,7 @@
       "vNetSubnetAddressPrefix": "10.0.0.0/24",
       "vmName": "[concat(parameters('projectName'), '-vm')]",
       "publicIPAddressName": "[concat(parameters('projectName'), '-ip')]",
-      "publicFQDNName": "[uniqueString(subscription().subscriptionId, resourceGroup().id)]",
+      "publicFQDNName": "[concat('wireguard', uniqueString(subscription().subscriptionId, resourceGroup().id))]",
       "networkInterfaceName": "[concat(parameters('projectName'), '-nic')]",
       "networkSecurityGroupName": "[concat(parameters('projectName'), '-nsg')]"
     },
@@ -232,6 +232,10 @@
        "Public FDQN": {
          "type":"string",
          "value" : "[reference(variables('publicIPAddressName')).dnsSettings.fqdn]"
+       }, 
+       "Client Config QR Code URL": {
+         "type":"string",
+         "value" : "[concat('http://', reference(variables('publicIPAddressName')).dnsSettings.fqdn, ':4711')]"
        }
     }
   }
