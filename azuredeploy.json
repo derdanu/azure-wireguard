@@ -1,0 +1,237 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "projectName": {
+        "type": "string",
+        "defaultValue": "wireguard",
+        "metadata": {
+          "description": "Specifies a name for generating resource names."
+        }
+      },
+      "location": {
+        "type": "string",
+        "defaultValue": "[resourceGroup().location]",
+        "metadata": {
+          "description": "Specifies the location for all resources."
+        }
+      },
+      "adminUsername": {
+        "type": "string",
+        "defaultValue": "azureuser",
+        "metadata": {
+          "description": "Specifies a username for the Virtual Machine."
+        }
+      },
+      "adminPassword": {
+        "type": "securestring",
+        "defaultValue": "P@ssw0rd1234",
+        "metadata": {
+          "description": "Specifies a password for the Virtual Machine."
+        }
+    },
+      "vmSize": {
+        "type": "string",
+        "defaultValue": "Standard_B1s",
+        "metadata": {
+          "description": "description"
+        }
+      }
+    },
+    "variables": {
+      "vNetName": "[concat(parameters('projectName'), '-vnet')]",
+      "vNetAddressPrefixes": "10.0.0.0/16",
+      "vNetSubnetName": "default",
+      "vNetSubnetAddressPrefix": "10.0.0.0/24",
+      "vmName": "[concat(parameters('projectName'), '-vm')]",
+      "publicIPAddressName": "[concat(parameters('projectName'), '-ip')]",
+      "publicFQDNName": "[uniqueString(subscription().subscriptionId, resourceGroup().id)]",
+      "networkInterfaceName": "[concat(parameters('projectName'), '-nic')]",
+      "networkSecurityGroupName": "[concat(parameters('projectName'), '-nsg')]"
+    },
+    "resources": [
+      {
+        "type": "Microsoft.Network/publicIPAddresses",
+        "apiVersion": "2020-05-01",
+        "name": "[variables('publicIPAddressName')]",
+        "location": "[parameters('location')]",
+        "properties": {
+          "publicIPAllocationMethod": "Dynamic",
+          "dnsSettings": {
+            "domainNameLabel": "[variables('publicFQDNName')]"
+        }
+        },
+        "sku": {
+          "name": "Basic"
+        }
+      },
+      {
+        "comments": "Network Security Group for subnet [variables('vNetSubnetName')]",
+        "type": "Microsoft.Network/networkSecurityGroups",
+        "apiVersion": "2020-05-01",
+        "name": "[variables('networkSecurityGroupName')]",
+        "location": "[parameters('location')]",
+        "properties": {
+          "securityRules": [
+            {
+              "name": "default-deny-ssh",
+              "properties": {
+                "priority": 1000,
+                "access": "Deny",
+                "direction": "Inbound",
+                "destinationPortRange": "22",
+                "protocol": "Tcp",
+                "sourceAddressPrefix": "*",
+                "sourcePortRange": "*",
+                "destinationAddressPrefix": "*"
+              }
+            },
+            {
+              "name": "default-allow-wireguard-server",
+              "properties": {
+                "priority": 1001,
+                "access": "Allow",
+                "direction": "Inbound",
+                "destinationPortRange": "51820",
+                "protocol": "Udp",
+                "sourceAddressPrefix": "*",
+                "sourcePortRange": "*",
+                "destinationAddressPrefix": "*"
+              }
+            },
+             {
+              "name": "default-allow-onetime-qr",
+              "properties": {
+                "priority": 1002,
+                "access": "Allow",
+                "direction": "Inbound",
+                "destinationPortRange": "4711",
+                "protocol": "Tcp",
+                "sourceAddressPrefix": "*",
+                "sourcePortRange": "*",
+                "destinationAddressPrefix": "*"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "Microsoft.Network/virtualNetworks",
+        "apiVersion": "2020-05-01",
+        "name": "[variables('vNetName')]",
+        "location": "[parameters('location')]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
+        ],
+        "properties": {
+          "addressSpace": {
+            "addressPrefixes": [
+              "[variables('vNetAddressPrefixes')]"
+            ]
+          },
+          "subnets": [
+            {
+              "name": "[variables('vNetSubnetName')]",
+              "properties": {
+                "addressPrefix": "[variables('vNetSubnetAddressPrefix')]",
+                "networkSecurityGroup": {
+                  "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "Microsoft.Network/networkInterfaces",
+        "apiVersion": "2020-05-01",
+        "name": "[variables('networkInterfaceName')]",
+        "location": "[parameters('location')]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName'))]",
+          "[resourceId('Microsoft.Network/virtualNetworks', variables('vNetName'))]",
+          "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
+        ],
+        "properties": {
+          "ipConfigurations": [
+            {
+              "name": "ipconfig1",
+              "properties": {
+                "privateIPAllocationMethod": "Dynamic",
+                "publicIPAddress": {
+                  "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName'))]"
+                },
+                "subnet": {
+                  "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vNetName'), variables('vNetSubnetName'))]"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "Microsoft.Compute/virtualMachines",
+        "apiVersion": "2021-11-01",
+        "name": "[variables('vmName')]",
+        "location": "[parameters('location')]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName'))]"
+        ],
+        "properties": {
+          "hardwareProfile": {
+            "vmSize": "[parameters('vmSize')]"
+          },
+          "osProfile": {
+            "computerName": "[variables('vmName')]",
+            "adminUsername": "[parameters('adminUsername')]",
+            "adminPassword": "[parameters('adminPassword')]"
+          },
+          "storageProfile": {
+            "imageReference": {
+              "publisher": "Canonical",
+              "offer": "0001-com-ubuntu-server-focal-daily",
+              "sku": "20_04-daily-lts-gen2",
+              "version": "latest"
+            },
+            "osDisk": {
+              "createOption": "fromImage"
+            }
+          },
+          "networkProfile": {
+            "networkInterfaces": [
+              {
+                "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName'))]"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "Microsoft.Compute/virtualMachines/extensions",
+        "name": "[concat(variables('vmName'),'/installcustomscript')]",
+        "location": "[resourceGroup().location]",
+        "apiVersion": "2020-12-01",
+        "dependsOn": [
+           "[resourceId('Microsoft.Compute/virtualMachines/', variables('vmName'))]"
+        ],
+        "properties": {
+           "publisher": "Microsoft.Azure.Extensions",
+           "type": "CustomScript",
+           "typeHandlerVersion": "2.0",
+           "autoUpgradeMinorVersion": true,
+            "settings": {
+                "timestamp": 20220909
+            },
+            "protectedSettings": {
+               "script": "IyEvYmluL3NoCmFwdC1nZXQgdXBkYXRlCmFwdC1nZXQgdXBncmFkZSAteSAKc2VkIC1pIC1lICdzLyNuZXQuaXB2NC5pcF9mb3J3YXJkLiovbmV0LmlwdjQuaXBfZm9yd2FyZD0xL2cnIC9ldGMvc3lzY3RsLmNvbmYKc2VkIC1pIC1lICdzLyNuZXQuaXB2Ni5jb25mLmFsbC5mb3J3YXJkaW5nLiovbmV0LmlwdjYuY29uZi5hbGwuZm9yd2FyZGluZz0xL2cnIC9ldGMvc3lzY3RsLmNvbmYKc3lzY3RsIC1wCmFwdC1nZXQgdXBkYXRlCmFwdC1nZXQgaW5zdGFsbCB3aXJlZ3VhcmQgcXJlbmNvZGUgYmFzZXogLXkKbWtkaXIgLW0gMDcwMCAvZXRjL3dpcmVndWFyZC8KdW1hc2sgMDc3IAp3ZyBnZW5rZXkgfCB0ZWUgL2V0Yy93aXJlZ3VhcmQvc2VydmVyX3ByaXZhdGVrZXkgfCB3ZyBwdWJrZXkgPiAvZXRjL3dpcmVndWFyZC9zZXJ2ZXJfcHVibGlja2V5CndnIGdlbmtleSB8IHRlZSAvZXRjL3dpcmVndWFyZC9jbGllbnRfcHJpdmF0ZWtleSB8IHdnIHB1YmtleSA+IC9ldGMvd2lyZWd1YXJkL2NsaWVudF9wdWJsaWNrZXkKd2cgZ2VucHNrID4gL2V0Yy93aXJlZ3VhcmQvcHJlc2hhcmVka2V5CgpjYXQgPiAvZXRjL3dpcmVndWFyZC93ZzAuY29uZiA8PCBFT0YKW0ludGVyZmFjZV0KQWRkcmVzcyA9IDE5Mi4xNjguNi4xLzI0Ckxpc3RlblBvcnQgPSA1MTgyMApQcml2YXRlS2V5ID0gJChjYXQgL2V0Yy93aXJlZ3VhcmQvc2VydmVyX3ByaXZhdGVrZXkpClBvc3RVcCA9IGlwdGFibGVzIC1BIEZPUldBUkQgLWkgd2cwIC1qIEFDQ0VQVDsgaXB0YWJsZXMgLXQgbmF0IC1BIFBPU1RST1VUSU5HIC1vIGV0aDAgLWogTUFTUVVFUkFERTsgaXA2dGFibGVzIC1BIEZPUldBUkQgLWkgd2cwIC1qIEFDQ0VQVDsgaXA2dGFibGVzIC10IG5hdCAtQSBQT1NUUk9VVElORyAtbyBldGgwIC1qIE1BU1FVRVJBREUKUG9zdERvd24gPSBpcHRhYmxlcyAtRCBGT1JXQVJEIC1pIHdnMCAtaiBBQ0NFUFQ7IGlwdGFibGVzIC10IG5hdCAtRCBQT1NUUk9VVElORyAtbyBldGgwIC1qIE1BU1FVRVJBREU7IGlwNnRhYmxlcyAtRCBGT1JXQVJEIC1pIHdnMCAtaiBBQ0NFUFQ7IGlwNnRhYmxlcyAtdCBuYXQgLUQgUE9TVFJPVVRJTkcgLW8gZXRoMCAtaiBNQVNRVUVSQURFCltQZWVyXQpQdWJsaWNLZXkgPSAgJChjYXQgL2V0Yy93aXJlZ3VhcmQvY2xpZW50X3B1YmxpY2tleSkKUHJlc2hhcmVkS2V5ID0gICQoY2F0IC9ldGMvd2lyZWd1YXJkL3ByZXNoYXJlZGtleSkKQWxsb3dlZElwcyA9IDE5Mi4xNjguNi4xMDEvMzIKRU9GCgpjYXQgPiAvZXRjL3dpcmVndWFyZC93ZzBfY2xpZW50LmNvbmYgPDwgRU9GCltJbnRlcmZhY2VdClByaXZhdGVLZXkgPSAkKGNhdCAvZXRjL3dpcmVndWFyZC9jbGllbnRfcHJpdmF0ZWtleSkKQWRkcmVzcyA9IDE5Mi4xNjguNi4xMDEvMzIKRE5TID0gMS4xLjEuMQpbUGVlcl0KUHVibGljS2V5ID0gICQoY2F0IC9ldGMvd2lyZWd1YXJkL3NlcnZlcl9wdWJsaWNrZXkpClByZXNoYXJlZEtleSA9ICQoY2F0IC9ldGMvd2lyZWd1YXJkL3ByZXNoYXJlZGtleSkKRW5kUG9pbnQgPSAkKGN1cmwgaWZjb25maWcubWUpOjUxODIwCkFsbG93ZWRJcHMgPSAwLjAuMC4wLzAsIDo6LzAKUGVyc2lzdGVudEtlZXBBbGl2ZSA9IDI1CkVPRgp3Zy1xdWljayB1cCB3ZzAKc3lzdGVtY3RsIGVuYWJsZSB3Zy1xdWlja0B3ZzAKZWNobyAtZSAiSFRUUC8xLjEgMjAwIE9LXHJcbiQoZGF0ZSlcclxuQ29udGVudC1UeXBlOiB0ZXh0L2h0bWw7IGNoYXJzZXQ9dXRmLThcclxuXHJcbiIgIjxwPjxpbWcgc3JjPVwiZGF0YTppbWFnZS9wbmc7YmFzZTY0LGBxcmVuY29kZSAtbyAtIDwgL2V0Yy93aXJlZ3VhcmQvd2cwX2NsaWVudC5jb25mIHwgYmFzZXpgXCI+PC9wPiIgfCBuYyAtbCA0NzExICY="
+           }
+        }
+      }
+    ],
+     "outputs": {
+       "Public FDQN": {
+         "type":"string",
+         "value" : "[reference(variables('publicIPAddressName')).dnsSettings.fqdn]"
+       }
+    }
+  }
