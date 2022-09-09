@@ -18,5 +18,5 @@ Quick deployment of a wireguard server on Azure with QR Code based setup of your
     az group delete -n $resourceGroupName 
 
 ### Client Config.
-Point your browser to http://<FQDN>:4711 and it will show an onetime QR code for mobile client setup. Just scan the code with your Wireguard App. Tested with iOS https://apps.apple.com/de/app/wireguard/id1441195209 
+Point your browser to http://<FQDN>:4711 and it will show an onetime QR code for mobile client setup. Just scan the code with your Wireguard App. Tested on iOS https://apps.apple.com/de/app/wireguard/id1441195209 
 
