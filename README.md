@@ -5,6 +5,8 @@ Quick deployment of a wireguard server on Azure with QR Code based setup of your
 ### Azure Portal
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fderdanu%2Fazure-wireguard%2Fmaster%2Fazuredeploy.json)
 
+![Template Output](img/template_output.png)
+
 ### CLI
 #### Create a server
     
